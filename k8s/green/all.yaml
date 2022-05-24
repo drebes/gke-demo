@@ -1,0 +1,75 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-deployment
+  labels:
+    app: echo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+      - name: echo
+        imagePullPolicy: IfNotPresent
+        image: k8s.gcr.io/echoserver:1.4
+        ports:
+        - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - name: hello
+        image: us-docker.pkg.dev/google-samples/containers/gke/hello-app:2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-service
+  annotations:
+    cloud.google.com/neg: '{"exposed_ports": {"8080":{"name": "green-echo-neg"}}}'
+spec:
+  selector:
+    app: echo
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-service
+  annotations:
+    cloud.google.com/neg: '{"exposed_ports": {"8080":{"name": "green-hello-neg"}}}'
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: hello
+  type: NodePort

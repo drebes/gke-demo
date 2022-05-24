@@ -1,0 +1,124 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-deployment
+  labels:
+    app: echo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+      - name: echo
+        imagePullPolicy: IfNotPresent
+        image: k8s.gcr.io/echoserver:1.4
+        ports:
+        - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - name: hello
+        image: us-docker.pkg.dev/google-samples/containers/gke/hello-app:2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: cdn-backendconfig
+spec:
+  cdn:
+    enabled: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-service
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "cdn-backendconfig"}'
+spec:
+  selector:
+    app: echo
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-service
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "cdn-backendconfig"}'
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: hello
+  type: NodePort
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: blue-cert
+spec:
+  domains:
+    - "34.149.119.238.nip.io"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: blue-ingress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: ingress-blue
+    networking.gke.io/managed-certificates: blue-cert
+spec:
+  defaultBackend:
+    service:
+      name: echo-service
+      port:
+        number: 8080
+  rules:
+  - http:
+      paths:
+      - path: /hello
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: hello-service
+            port:
+              number: 8080
+      - path: /echo
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 8080
